@@ -2,48 +2,48 @@ export const getCreateSnapshotSql = (sourceDb: string, scriptOnly: number) => `
  use master;
  set nocount on;
  BEGIN TRY
- 
+
  declare @scriptOnly bit = ${scriptOnly};
- declare @fileSql	varchar(3000)	= '' ;
+ declare @fileSql	varchar(MAX)	= '' ;
  declare @sourceDb	varchar(100) = '${sourceDb}';
  declare @filePath	varchar(200) = null;
- declare @tempAppendSql	varchar(200) = '_Snapshot_' + replace(convert(varchar(20), GETUTCDATE(),110),'-','_'); 
- declare @execSql	nvarchar(4000) = '';
+ declare @tempAppendSql	varchar(200) = '_Snapshot_' + replace(convert(varchar(20), GETUTCDATE(),110),'-','_');
+ declare @execSql	nvarchar(MAX) = '';
  declare @snapDbName varchar(200);
- declare @appendSql varchar(200); 
+ declare @appendSql varchar(200);
 
  -- create a unique name for the snapshot
  declare @counter int = 1;
  select @appendSql = @tempAppendSql + '_0' + convert(varchar, @counter);
  select @snapDbName = @sourceDb + @appendSql;
  while exists (select * from sys.databases dbs where dbs.[name] = @snapDbName )
-     begin    
+     begin
          select @counter = @counter + 1;
-         declare @snapCounter varchar(5) = convert(varchar(5), @counter);        
+         declare @snapCounter varchar(5) = convert(varchar(5), @counter);
          if (len(@snapCounter) < 2) select @snapCounter = '0' + @snapCounter;
          select @appendSql = @tempAppendSql + '_' + @snapCounter;
-         select @snapDbName = @sourceDb + @appendSql;        
+         select @snapDbName = @sourceDb + @appendSql;
      end;
 
  -- Script to get filename(s) based on
  -- https://www.sqlservercentral.com/scripts/create-database-snapshot-dynamically
  select @fileSql = @fileSql +
-     case when @fileSql <> '' then + ',' else '' end 
-     + '(NAME = [' + smf.[name] + '],' + char(10) +  'FILENAME = ''' + isnull(@filePath, left(smf.[physical_name], len(smf.[physical_name])- 4 )) + @appendSql + '.ss'')'		
+     case when @fileSql <> '' then + ',' else '' end
+     + '(NAME = [' + smf.[name] + '],' + char(10) +  'FILENAME = ''' + isnull(@filePath, left(smf.[physical_name], len(smf.[physical_name])- 4 )) + @appendSql + '.ss'')'
  from sys.master_files as smf
  join sys.databases as sdb on sdb.[database_id] = smf.[database_id]
      where sdb.[state] = 0 -- online databases.
      and smf.[type] = 0 -- data files.
      and sdb.[name] = @sourceDb;
- 
+
  select @execSql = 'CREATE DATABASE [' + @snapDbName + '] ON ' + char(10) + @fileSql + char(10) + ' AS SNAPSHOT OF [' + @sourceDb + '];'
  --print @execSql;
  if (@scriptOnly = 1) -- just return the sql
-     begin	
+     begin
          select 'success',  @execSql;
      end
- else 
-     begin		
+ else
+     begin
          exec sp_executesql @execSql;
          select 'success',  @snapDbName;
      end
@@ -69,7 +69,7 @@ declare @snapshotName varchar(400) = '${snapshotName}';
     begin
         select 'error', 'Cannot revert [' + @snapShotName + ']. It is not a snapshot!';
         return;
-    end; 
+    end;
 
 select @sourceDb = db.[name], @sourceDbId = db.database_id
     from sys.databases db
@@ -100,11 +100,11 @@ else
     begin
         select @rowCount = count(*) from @tblSql;
         declare @rowCounter int = 1;
-        declare @sql nvarchar(4000) = '';
+        declare @sql nvarchar(MAX) = '';
         while (@rowCounter <= @rowCount)
             begin
-                select @sql = t.sqlString 
-                    from @tblSql t 
+                select @sql = t.sqlString
+                    from @tblSql t
                     where t.rowId = @rowCounter;
                 exec sp_executesql @sql;
                 select @rowCounter = @rowCounter + 1;
